@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Viseme player</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  svg { display: block; margin: 1.5rem auto; }
+  #label { text-align: center; font: 600 1.5rem monospace; min-height: 2rem; }
+  label { display: block; margin: .5rem 0; }
+</style>
+</head>
+<body>
+<h1>Viseme player</h1>
+<p>Pick a wav from <code>results/</code> and its matching <code>.visemes.json</code>, then press play.
+   Does the mouth move in time with the sound?</p>
+<label>Audio: <input type="file" id="wav" accept="audio/*"></label>
+<label>Visemes: <input type="file" id="vis" accept=".json"></label>
+<audio id="audio" controls></audio>
+
+<svg width="240" height="240" viewBox="-120 -120 240 240">
+  <circle r="110" fill="#f3d9c4"/>
+  <circle cx="-40" cy="-35" r="9"/><circle cx="40" cy="-35" r="9"/>
+  <ellipse id="mouth" cx="0" cy="45" rx="30" ry="3" fill="#7a2b2b"/>
+  <rect id="teeth" x="-18" y="38" width="36" height="6" fill="#fff" opacity="0"/>
+</svg>
+<div id="label"></div>
+
+<script>
+// Mouth width/height per viseme. Tweak these to taste.
+const SHAPES = {
+  rest: [30, 3, 0], MBP: [28, 1, 0], FV: [30, 5, 1], TDNL: [30, 10, 1], SZ: [36, 5, 1], CH: [20, 14, 1],
+  KGR: [28, 12, 0], AA: [34, 30, 0], EI: [40, 12, 1], O: [20, 22, 0], U: [12, 12, 0], EU: [18, 16, 0],
+};
+const audio = document.getElementById("audio");
+const mouth = document.getElementById("mouth");
+const teeth = document.getElementById("teeth");
+const label = document.getElementById("label");
+let timeline = [];
+
+document.getElementById("wav").onchange = e => { audio.src = URL.createObjectURL(e.target.files[0]); };
+document.getElementById("vis").onchange = async e => { timeline = JSON.parse(await e.target.files[0].text()); };
+
+function frame() {
+  const ms = audio.currentTime * 1000;
+  const v = timeline.find(t => ms >= t.start_ms && ms < t.end_ms) || { viseme: "rest", phonemes: "" };
+  const [rx, ry, showTeeth] = SHAPES[v.viseme] || SHAPES.rest;
+  mouth.setAttribute("rx", rx);
+  mouth.setAttribute("ry", ry);
+  teeth.setAttribute("opacity", showTeeth && ry > 4 ? 1 : 0);
+  label.textContent = audio.paused ? "" : `${v.viseme}  ${v.phonemes}`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
