@@ -1,0 +1,28 @@
+[project]
+name = "french-tutor-experiments"
+version = "0.1.0"
+description = "Throwaway experiments that feed decisions back into planning.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+# Install only what a track needs:  uv sync --group speech
+[dependency-groups]
+learner = ["numpy", "matplotlib", "fsrs"]
+speech = ["numpy", "phonemizer", "torch", "transformers", "faster-whisper"]
+tts = ["piper-tts[alignment]"]  # [alignment] pulls in onnx for phoneme timings
+notebook = ["jupyterlab"]
+dev = [
+    "ruff>=0.17.5",
+]
+
+# CPU-only torch wheels (no NVIDIA GPU on this machine; the default wheel bundles CUDA).
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 120
