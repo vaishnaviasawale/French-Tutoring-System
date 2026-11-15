@@ -2,7 +2,6 @@
 __pycache__/
 .ipynb_checkpoints/
 # Generated outputs, your voice recordings, and downloaded models stay local
-*/results/*
 */recordings/*
 */voices/*
 !*/.gitkeep

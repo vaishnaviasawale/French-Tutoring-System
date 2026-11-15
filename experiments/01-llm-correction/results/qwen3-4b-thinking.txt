@@ -1,0 +1,35 @@
+uv run python 01-llm-correction/run_eval.py --models qwen3:4b -
+-think 
+
+=== qwen3:4b (think=True) ===
+ok s01  Je suis allé à la plage hier avec mes amis.
+ok s02  Elle est allé au marché ce matin.
+ok s03  J'ai besoin de un stylo.
+XX s04  Il faut que tu viens demain.
+     expected: Il faut que tu viennes demain.
+     got:      Il faut que tu vienne demain.  ['verb_conjugation']
+ok s05  La problème est difficile.
+ok s06  Je vais à le cinéma ce soir.
+ok s07  Nous avons mangé des pommes vertes.
+ok s08  Si j'aurais le temps, je viendrais.
+ok s09  Je n'ai pas des frères.
+XX s10  Quand j'étais petit, je suis allé à la plage tous les étés.
+     expected: Quand j'étais petit, j'allais à la plage tous les étés.
+     got:      Quand j'étais petit, je allais à la plage tous les étés.  ['passe_compose_vs_imparfait']
+ok s11  Les filles sont très contents.
+ok s12  Je me suis lavé les mains.
+XX s13  C'est le livre que je t'ai parlé.
+     expected: C'est le livre dont je t'ai parlé.
+     got:      C'est le livre que je t'ai dit  ['verb_conjugation']
+XX s14  Il a beaucoup des amis.
+     expected: Il a beaucoup d'amis.
+     got:      Il a beaucoup de amis.  ['quantity_de']
+ok s15  Je pense qu'il est déjà parti.
+XX s16  Elle s'est souvenu de son enfance.
+     expected: Elle s'est souvenue de son enfance.
+     got:      Elle s'est souvenue de sa enfance.  ['past_participle_agreement', 'adjective_agreement']
+ok s17  J'habite en Paris depuis deux ans.
+ok s18  Hier, je suis allé au cinéma et j'ai regardé un film.
+
+model     n   detect_acc  false_pos  missed  fix_exact  concept_recall  sec/sent  tok/s
+qwen3:4b  18  1.00        0/5        0/13    0.72       0.77            94.50     32.38
