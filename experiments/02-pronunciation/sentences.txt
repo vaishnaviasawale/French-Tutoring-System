@@ -1,0 +1,11 @@
+# id | sentence | what it tests
+s01 | Un bon vin blanc. | nasal vowels œ̃ ɔ̃ ɛ̃ ɑ̃
+s02 | Tu as vu la rue ? | /y/ vs /u/ (rue vs roue)
+s03 | Les enfants ont un ami. | liaison
+s04 | Ils sont dans le jardin, ils ont un chien. | /s/ vs /z/ (sont vs ont)
+s05 | Le poisson n'est pas du poison. | /s/ vs /z/ between vowels
+s06 | Je veux deux œufs. | /ø/
+s07 | Ma sœur a peur. | /œ/ before r
+s08 | La grenouille est mouillée. | /ʁ/ and /j/
+s09 | Je voudrais un croissant, s'il vous plaît. | everyday phrase, ʁ clusters
+s10 | Il fait beau aujourd'hui. | silent letters, /ɥ/
