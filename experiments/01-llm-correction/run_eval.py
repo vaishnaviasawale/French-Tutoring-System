@@ -53,7 +53,8 @@ SCHEMA = {
 }
 
 
-def chat(model: str, sentence: str, think: bool) -> dict:
+def chat(model: str, sentence: str, think: bool) -> tuple[dict, bool]:
+    """Return (response, think_applied). think_applied is False if the model rejected the flag."""
     body = {
         "model": model,
         "messages": [
@@ -66,12 +67,12 @@ def chat(model: str, sentence: str, think: bool) -> dict:
         "options": {"temperature": 0},
     }
     try:
-        return _post(body)
+        return _post(body), think
     except urllib.error.HTTPError as e:
         # Models without a thinking mode reject the "think" field.
         if e.code == 400 and "think" in e.read().decode():
             del body["think"]
-            return _post(body)
+            return _post(body), False
         raise
 
 
@@ -88,7 +89,9 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def grade(gold: dict, pred: dict) -> dict:
+def grade(gold: dict, pred: dict, text: str) -> dict:
+    # Models sometimes set has_error inconsistently with `corrected`, so derive detection from the text itself.
+    pred = {**pred, "has_error": normalize(pred["corrected"]) != normalize(text)}
     pred_concepts = {e["concept"] for e in pred["errors"]}
     return {
         "detect_ok": pred["has_error"] == gold["has_error"],
@@ -145,13 +148,18 @@ def main() -> None:
         for model in args.models:
             print(f"\n=== {model} (think={args.think}) ===")
             rows = []
+            warned = False
             for gold in gold_rows:
-                resp = chat(model, gold["text"], args.think)
+                resp, think_applied = chat(model, gold["text"], args.think)
+                if args.think and not think_applied and not warned:
+                    print(f"WARNING: {model} has no thinking mode; running WITHOUT thinking.")
+                    warned = True
                 pred = json.loads(resp["message"]["content"])
-                metrics = grade(gold, pred)
+                metrics = grade(gold, pred, gold["text"])
                 row = {
                     "model": model,
-                    "think": args.think,
+                    "think": think_applied,
+                    "think_requested": args.think,
                     "gold": gold,
                     "pred": pred,
                     "metrics": metrics,
