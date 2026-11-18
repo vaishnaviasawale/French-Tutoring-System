@@ -64,7 +64,7 @@ def chat(model: str, sentence: str, think: bool) -> tuple[dict, bool]:
         "format": SCHEMA,
         "stream": False,
         "think": think,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 4096},
     }
     try:
         return _post(body), think
@@ -80,7 +80,7 @@ def _post(body: dict) -> dict:
     req = urllib.request.Request(
         OLLAMA_URL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=900) as resp:
+    with urllib.request.urlopen(req, timeout=1800) as resp:
         return json.load(resp)
 
 
@@ -100,6 +100,28 @@ def grade(gold: dict, pred: dict, text: str) -> dict:
         "fix_exact": normalize(pred["corrected"]) == normalize(gold["corrected"]),
         # Only meaningful for sentences that actually contain errors.
         "concept_ok": set(gold["concepts"]) <= pred_concepts if gold["has_error"] else None,
+    }
+
+
+def parse_pred(resp: dict) -> dict | None:
+    """Return the parsed prediction, or None if the output was cut off at the token cap or is not valid JSON."""
+    if resp.get("done_reason") == "length":
+        return None
+    try:
+        pred = json.loads(resp["message"]["content"])
+        pred["corrected"], pred["errors"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+    return pred
+
+
+def failed_metrics(gold: dict) -> dict:
+    return {
+        "detect_ok": False,
+        "false_positive": False,
+        "missed": gold["has_error"],
+        "fix_exact": False,
+        "concept_ok": False if gold["has_error"] else None,
     }
 
 
@@ -154,8 +176,14 @@ def main() -> None:
                 if args.think and not think_applied and not warned:
                     print(f"WARNING: {model} has no thinking mode; running WITHOUT thinking.")
                     warned = True
-                pred = json.loads(resp["message"]["content"])
-                metrics = grade(gold, pred, gold["text"])
+                pred = parse_pred(resp)
+                truncated = pred is None
+                if truncated:
+                    # Hit the token cap (e.g. endless thinking) or invalid JSON: count as a failure and keep going.
+                    pred = {"has_error": False, "corrected": "", "errors": []}
+                    metrics = failed_metrics(gold)
+                else:
+                    metrics = grade(gold, pred, gold["text"])
                 row = {
                     "model": model,
                     "think": think_applied,
@@ -163,12 +191,19 @@ def main() -> None:
                     "gold": gold,
                     "pred": pred,
                     "metrics": metrics,
+                    "truncated": truncated,
                     "latency_s": resp["total_duration"] / 1e9,
-                    "tok_per_s": resp["eval_count"] / (resp["eval_duration"] / 1e9),
+                    "tok_per_s": resp["eval_count"] / (resp["eval_duration"] / 1e9)
+                    if resp.get("eval_duration")
+                    else 0.0,
                 }
                 rows.append(row)
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                out.flush()
 
+                if truncated:
+                    print(f"TR {gold['id']}  {gold['text']}  (truncated or invalid JSON; counted as failed)")
+                    continue
                 mark = "ok " if metrics["detect_ok"] and metrics["fix_exact"] else "XX "
                 print(f"{mark}{gold['id']}  {gold['text']}")
                 if mark == "XX ":
