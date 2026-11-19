@@ -1,0 +1,140 @@
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system$ cd experiments/01-llm-correction/
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments/01-llm-correction$ uv run python 01-llm-correction/run_eval.py --models qwen3:4b qwen3:8b
+/home/vaishnavi-asawale/Projects/french-tutoring-system/experiments/.venv/bin/python3: can't open file '/home/vaishnavi-asawale/Projects/french-tutoring-system/experiments/01-llm-correction/01-llm-correction/run_eval.py': [Errno 2] No such file or directory
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments/01-llm-correction$ cd ..
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ cd ..
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system$ cd experiments/
+vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ source .venv/bin/activate
+(french-tutor-experiments) vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ uv run python 01-llm-correction/run_eval.py --models qwen3:4b qwen3:8b
+
+=== qwen3:4b (think=False) ===
+ok s01  Je suis allé à la plage hier avec mes amis.
+ok s02  Elle est allé au marché ce matin.
+ok s03  J'ai besoin de un stylo.
+ok s04  Il faut que tu viens demain.
+ok s05  La problème est difficile.
+ok s06  Je vais à le cinéma ce soir.
+ok s07  Nous avons mangé des pommes vertes.
+ok s08  Si j'aurais le temps, je viendrais.
+ok s09  Je n'ai pas des frères.
+XX s10  Quand j'étais petit, je suis allé à la plage tous les étés.
+     expected: Quand j'étais petit, j'allais à la plage tous les étés.
+     got:      Quand j'étais petit, je suis allé à la plage tous les étés.  ['passe_compose_vs_imparfait']
+XX s11  Les filles sont très contents.
+     expected: Les filles sont très contentes.
+     got:      Les filles sont très contents.  []
+ok s12  Je me suis lavé les mains.
+XX s13  C'est le livre que je t'ai parlé.
+     expected: C'est le livre dont je t'ai parlé.
+     got:      C'est le livre que je t'ai parlé.  ['other']
+ok s14  Il a beaucoup des amis.
+ok s15  Je pense qu'il est déjà parti.
+ok s16  Elle s'est souvenu de son enfance.
+XX s17  J'habite en Paris depuis deux ans.
+     expected: J'habite à Paris depuis deux ans.
+     got:      J'habite en Paris depuis deux ans.  []
+ok s18  Hier, je suis allé au cinéma et j'ai regardé un film.
+
+=== qwen3:8b (think=False) ===
+ok s01  Je suis allé à la plage hier avec mes amis.
+ok s02  Elle est allé au marché ce matin.
+ok s03  J'ai besoin de un stylo.
+XX s04  Il faut que tu viens demain.
+     expected: Il faut que tu viennes demain.
+     got:      Il faut que tu viens demain.  []
+ok s05  La problème est difficile.
+ok s06  Je vais à le cinéma ce soir.
+ok s07  Nous avons mangé des pommes vertes.
+ok s08  Si j'aurais le temps, je viendrais.
+ok s09  Je n'ai pas des frères.
+XX s10  Quand j'étais petit, je suis allé à la plage tous les étés.
+     expected: Quand j'étais petit, j'allais à la plage tous les étés.
+     got:      Quand j'étais petit, je suis allé à la plage chaque été.  ['verb_conjugation', 'passe_compose_vs_imparfait']
+ok s11  Les filles sont très contents.
+ok s12  Je me suis lavé les mains.
+XX s13  C'est le livre que je t'ai parlé.
+     expected: C'est le livre dont je t'ai parlé.
+     got:      C'est le livre que je t'ai parlé de.  ['relative_pronouns']
+ok s14  Il a beaucoup des amis.
+ok s15  Je pense qu'il est déjà parti.
+ok s16  Elle s'est souvenu de son enfance.
+XX s17  J'habite en Paris depuis deux ans.
+     expected: J'habite à Paris depuis deux ans.
+     got:      J'habite en Paris depuis deux ans.  []
+ok s18  Hier, je suis allé au cinéma et j'ai regardé un film.
+
+model     n   detect_acc  false_pos  missed  fix_exact  concept_recall  sec/sent  tok/s
+qwen3:4b  18  0.78        0/5        4/13    0.78       0.31            3.68      34.39
+qwen3:8b  18  0.89        0/5        2/13    0.78       0.54            8.58      12.98
+
+Full outputs (incl. explanations): /home/vaishnavi-asawale/Projects/french-tutoring-system/experiments/01-llm-correction/results/20261117-230620.jsonl
+(french-tutor-experiments) vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ ollama pull gemma3:12b
+pulling manifest 
+pulling manifest 
+pulling manifest 
+pulling 13576eb6dd8d: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏ 7.3 GB                         
+pulling 4abe4caf8e68: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏ 854 MB                         
+pulling e0a42594d802: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏  358 B                         
+pulling dd084c7d92a3: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏ 8.4 KB
+pulling 3116c5225075: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏   77 B                         
+pulling fe25b92561cf: 100% ▕█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏  145 B                         
+verifying sha256 digest 
+writing manifest 
+success 
+(french-tutor-experiments) vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ uv run python 01-llm-correction/run_eval.py --models mistral-small gemma3:12b
+
+=== mistral-small (think=False) ===
+ok s01  Je suis allé à la plage hier avec mes amis.
+ok s02  Elle est allé au marché ce matin.
+ok s03  J'ai besoin de un stylo.
+ok s04  Il faut que tu viens demain.
+ok s05  La problème est difficile.
+ok s06  Je vais à le cinéma ce soir.
+ok s07  Nous avons mangé des pommes vertes.
+ok s08  Si j'aurais le temps, je viendrais.
+ok s09  Je n'ai pas des frères.
+ok s10  Quand j'étais petit, je suis allé à la plage tous les étés.
+ok s11  Les filles sont très contents.
+ok s12  Je me suis lavé les mains.
+ok s13  C'est le livre que je t'ai parlé.
+ok s14  Il a beaucoup des amis.
+ok s15  Je pense qu'il est déjà parti.
+XX s16  Elle s'est souvenu de son enfance.
+     expected: Elle s'est souvenue de son enfance.
+     got:      Elle s'en est souvenue.  ['past_participle_agreement', 'other']
+ok s17  J'habite en Paris depuis deux ans.
+ok s18  Hier, je suis allé au cinéma et j'ai regardé un film.
+
+=== gemma3:12b (think=False) ===
+ok s01  Je suis allé à la plage hier avec mes amis.
+ok s02  Elle est allé au marché ce matin.
+ok s03  J'ai besoin de un stylo.
+ok s04  Il faut que tu viens demain.
+ok s05  La problème est difficile.
+ok s06  Je vais à le cinéma ce soir.
+ok s07  Nous avons mangé des pommes vertes.
+ok s08  Si j'aurais le temps, je viendrais.
+XX s09  Je n'ai pas des frères.
+     expected: Je n'ai pas de frères.
+     got:      Je n'ai pas de frère.  ['partitive_negation']
+ok s10  Quand j'étais petit, je suis allé à la plage tous les étés.
+ok s11  Les filles sont très contents.
+XX s12  Je me suis lavé les mains.
+     expected: Je me suis lavé les mains.
+     got:      Je me suis lavé(e) les mains.  ['adjective_agreement']
+ok s13  C'est le livre que je t'ai parlé.
+ok s14  Il a beaucoup des amis.
+ok s15  Je pense qu'il est déjà parti.
+ok s16  Elle s'est souvenu de son enfance.
+XX s17  J'habite en Paris depuis deux ans.
+     expected: J'habite à Paris depuis deux ans.
+     got:      J'habite en Paris depuis deux ans.  []
+ok s18  Hier, je suis allé au cinéma et j'ai regardé un film.
+
+model          n   detect_acc  false_pos  missed  fix_exact  concept_recall  sec/sent  tok/s
+mistral-small  18  1.00        0/5        0/13    0.94       0.77            53.97     1.60
+gemma3:12b     18  0.89        1/5        1/13    0.83       0.77            21.82     5.32
+
+Full outputs (incl. explanations): /home/vaishnavi-asawale/Projects/french-tutoring-system/experiments/01-llm-correction/results/20261117-233924.jsonl
+(french-tutor-experiments) vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ ^C
+(french-tutor-experiments) vaishnavi-asawale@fedora:~/Projects/french-tutoring-system/experiments$ 
