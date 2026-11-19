@@ -4,9 +4,9 @@ Date: first runs 2026-11-15, re-run 2026-11-17 after removing the answer leak an
 
 ## Decision (provisional)
 
-- **Use `mistral-small` for error detection and correction.** It is the only model with perfect detection (18/18, 0/5 false positives) and it fixes 17 of 18 sentences exactly. Its one miss (s16) is a rewrite, not a missed error.
-- **Do not treat concept tags as reliable for any model yet.** With the leak gone, mistral-small and gemma3:12b both tag 10 of 13 correctly (0.77), and the Qwen3 models tag 4 of 13 (4b) and 7 of 13 (8b). The mastery tracker depends on these tags. Most tag misses are label overlaps (finding 4), so a taxonomy fix may be cheaper than a model change.
-- **Keep it off the live conversation path.** Mistral-small now averages 54 s per sentence at 1.6 tok/s (it was 31 s in the first run), far too slow for the ASR → LLM → TTS loop. It may even be too slow to keep up as a per-turn background job, so batch it (end of session, or writing mode where waiting is acceptable).
+- **Use `mistral-small` for error detection and correction, without explanations.** It is the only model with perfect detection (18/18, 0/5 false positives) and it fixes 17 of 18 sentences exactly. Its one miss (s16) is a rewrite, not a missed error. Dropping the `explanation` field (`--no-explain`) cut latency to 24 s per sentence with the same accuracy (finding 10).
+- **Do not treat concept tags as reliable for any model yet.** With the leak gone, mistral-small tags 10 of 13 correctly with explanations and 11 of 13 without (0.77 and 0.85), gemma3:12b 10 of 13 (0.77), and the Qwen3 models 4 of 13 (4b) and 7 of 13 (8b). The mastery tracker depends on these tags. Most tag misses are label overlaps (finding 4), so a taxonomy fix may be cheaper than a model change.
+- **Keep it off the live conversation path.** Even without explanations it takes 24 s per sentence (13 to 16 s on correct sentences, 24 to 39 s on errors), far too slow for the ASR → LLM → TTS loop. It is fast enough to run as a queued per-turn background job, but not to answer in real time. Batch it (end of session) or use it in writing mode where waiting is acceptable.
 - **`gemma3:12b` is not a replacement.** It is 2.5 times faster than mistral-small (22 s per sentence) but it adds a false positive and misses s17. It is still too slow for live use.
 - **Do not use thinking mode** on any model. The thinking runs were not repeated, so this rests on the first, leaky-prompt run (finding 6). It is 10 to 30 times slower and showed no accuracy gain there.
 - **There is no case for `qwen3:8b` over `qwen3:4b`.** It is 2.3 times slower and equal on correction (finding 3).
@@ -16,6 +16,7 @@ Date: first runs 2026-11-15, re-run 2026-11-17 after removing the answer leak an
 
 | Config | Raw output | Terminal copy |
 | --- | --- | --- |
+| mistral-small (no think, `--no-explain`), clean prompt | `20261119-221504.jsonl` | `experiments/mistral_no_explain.txt` |
 | qwen3:4b, qwen3:8b (no think), clean prompt | `20261117-230620.jsonl` | `experiments/all_4.txt` |
 | mistral-small, gemma3:12b (no think), clean prompt | `20261117-233924.jsonl` | `experiments/all_4.txt` |
 | qwen3:4b, qwen3:8b, mistral-small (no think), leaky prompt | `20261115-202639.jsonl` | `all_3_run_1.txt` |
@@ -30,10 +31,13 @@ The 2026-11-17 runs are the main results. The 2026-11-15 runs used a prompt that
 
 | Model | think | detect_acc | false_pos | missed | fix_exact | concept_recall | sec/sent (mean) | tok/s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| mistral-small | no | **1.00** | 0/5 | 0/13 | **0.94** | **0.77** | 54.0 | 1.6 |
+| mistral-small, no explanation | no | **1.00** | 0/5 | 0/13 | **0.94** | **0.85** | 24.4 | 2.7 |
+| mistral-small | no | **1.00** | 0/5 | 0/13 | **0.94** | 0.77 | 54.0 | 1.6 |
 | gemma3:12b | no | 0.89 | 1/5 | 1/13 | 0.83 | **0.77** | 21.8 | 5.3 |
 | qwen3:8b | no | 0.89 | 0/5 | 2/13 | 0.78 | 0.54 | 8.6 | 13.0 |
 | qwen3:4b | no | 0.78 | 0/5 | 4/13 | 0.78 | 0.31 | **3.7** | 34.4 |
+
+The "no explanation" row ran on 2026-11-19 with `--no-explain`: the prompt and schema ask only for `corrected` and, per error, `original`, `correction` and `concept`. Its numbers are not from the same session as the other rows (finding 10).
 
 For reference, the first run on the leaky prompt scored mistral-small 1.00 / 1.00 / 1.00 (detect / fix / concept), qwen3:4b 0.89 / 0.78 / 0.54 and qwen3:8b 0.89 / 0.83 / 0.46. The think runs are below.
 
@@ -74,12 +78,12 @@ Concept tags missed (expected → got):
 | id | expected | 4b | 8b | mistral | gemma3:12b |
 | --- | --- | --- | --- | --- | --- |
 | s02 | past_participle_agreement | verb_conjugation | verb_conjugation | ok | ok |
-| s03 | elision | contraction_articles | contraction_articles | contraction_articles | contraction_articles |
-| s04 | subjunctive_present | verb_conjugation | none | verb_conjugation | ok |
+| s03 | elision | contraction_articles | contraction_articles | contraction_articles (same without explanation) | contraction_articles |
+| s04 | subjunctive_present | verb_conjugation | none | verb_conjugation (ok without explanation) | ok |
 | s08 | si_clause_conditional | passe_compose_vs_imparfait | verb_conjugation | ok | ok |
 | s11 | adjective_agreement | none | ok | ok | ok |
 | s13 | relative_pronouns | other | ok | ok | ok |
-| s14 | quantity_de | spelling | ok | elision | contraction_articles |
+| s14 | quantity_de | spelling | ok | elision (same without explanation) | contraction_articles |
 | s16 | past_participle_agreement | gender_agreement | verb_conjugation | ok | ok |
 | s17 | prepositions_places | none | none | ok | none |
 
@@ -95,10 +99,11 @@ Concept tags missed (expected → got):
    - s17: it missed the error entirely, like both Qwens.
 
    At 22 s per sentence (10 s on correct sentences, 20 to 31 s on errors) it is 2.5 times faster than mistral-small but still 6 times slower than qwen3:4b. The false positive rules it out as the primary corrector unless a prompt tweak fixes the "(e)" hedging.
-6. **Thinking mode was not re-tested, and its evidence is weaker.** The think numbers come from the leaky prompt, which inflates tagging in particular. What probably still holds is the cost: 30 times the latency for 4b (3 s → 95 s). The accuracy results were mixed even with the answers in the prompt. 4b-think raised detection from 0.89 to 1.00 but lowered exact fixes from 0.78 to 0.72, with new elision errors ("je allais", "de amis", "de sa enfance", "vienne"). 8b-think "corrected" correct sentences s01 and s12, so false positives rose from 0/5 to 2/5. The no-think default is safe. Re-run with the clean prompt only if there is a reason to revisit it.
-7. **Speed is worse than first measured, and unstable.** Mistral-small averaged 31 s per sentence in the first run and 54 s in this one (tok/s 2.7 → 1.6). The Qwen models also slowed by about 18% (4b 3.1 → 3.7 s, 8b 7.3 → 8.6 s). Per-sentence mistral latency ranges from 22 s (correct sentences) to 95 s (s16). The cause isn't known. The machine load wasn't controlled, and mistral and gemma ran in the same session right after the gemma download. Treat any single latency figure as ±50%. The first call of each model includes the load cost (qwen3:8b s01 25 s against 3 s for later correct sentences). Output length drives the rest, so an explanation-free output mode should cut the time.
+6. **Thinking mode was not re-tested, and its evidence is weaker.** A re-run on 2026-11-18 failed. qwen3:4b finished, but qwen3:8b timed out. Ollama was decoding at about 1.6 tok/s on a thinking generation that had already run to 2900 tokens. The user decided to skip thinking mode for now. `run_eval.py` now caps output at 2048 tokens and records a timeout or truncation as a failed row instead of crashing. The think numbers come from the leaky prompt, which inflates tagging in particular. What probably still holds is the cost: 30 times the latency for 4b (3 s → 95 s). The accuracy results were mixed even with the answers in the prompt. 4b-think raised detection from 0.89 to 1.00 but lowered exact fixes from 0.78 to 0.72, with new elision errors ("je allais", "de amis", "de sa enfance", "vienne"). 8b-think "corrected" correct sentences s01 and s12, so false positives rose from 0/5 to 2/5. The no-think default is safe. Re-run with the clean prompt only if there is a reason to revisit it.
+7. **Speed is worse than first measured, and unstable.** Mistral-small averaged 31 s per sentence in the first run and 54 s in this one (tok/s 2.7 → 1.6). The Qwen models also slowed by about 18% (4b 3.1 → 3.7 s, 8b 7.3 → 8.6 s). Per-sentence mistral latency ranges from 22 s (correct sentences) to 95 s (s16). The cause isn't known. The machine load wasn't controlled, and mistral and gemma ran in the same session right after the gemma download. Treat any single latency figure as ±50%. The first call of each model includes the load cost (qwen3:8b s01 25 s against 3 s for later correct sentences). Output length drives the rest (finding 10).
 8. **The model doesn't always keep its fields consistent.** For s04, qwen3:8b outputs the corrected text unchanged, with no error flagged and no tag. In the first run it produced the right correction with `has_error` set to false. Deriving detection from `corrected != text` would catch that earlier pattern. It would not help s10, s13 or s17, where the text comes back unchanged.
 9. **The leak fix changed the conclusions less than feared, but it did change them.** Mistral's perfect concept recall (1.00) was inflated by the leak, and it is now 0.77. Mistral's fix accuracy only dropped from 1.00 to 0.94. Qwen's ranking against mistral is the same. The leak never explained why Qwen fails s10 and s13, since those sentences were never leaked.
+10. **Dropping explanations roughly halves mistral-small's latency without hurting correction.** With `--no-explain`, mean latency fell from 54.0 s to 24.4 s per sentence, with detection (1.00), false positives (0/5) and exact fixes (0.94) unchanged. The pattern held across sentences. Correct sentences take 13 to 16 s (they were about 22 s) and error sentences 24 to 39 s (they were about 55 to 95 s). Concept recall rose from 0.77 to 0.85, because s04 is now tagged `subjunctive_present`. That is probably noise from a single run rather than an effect of the shorter output, and s03 and s14 are mislabelled as before. The comparison has a confound. Tokens per second also recovered (1.6 → 2.7) between the two runs, with the CPU governor still on `powersave`, so part of the speed-up is just the machine returning to normal. The first, explained run (2026-11-15) took 31 s at 2.7 tok/s, so against a like-for-like baseline the saving is about 20%, not 55%. A same-session baseline would settle it. A 13 s floor on correct sentences, where there is almost nothing to generate, suggests that processing the long system prompt costs several seconds per call. s16 is still rewritten to "Elle s'en est souvenue.", so that behaviour doesn't come from the explanation field.
 
 ## Caveats
 
@@ -111,10 +116,11 @@ Concept tags missed (expected → got):
 
 ## Proposed changes to the plan (not yet applied)
 
-- §2 and §9: replace "Qwen3:8b or 14b" as the single LLM. Use a small fast model (qwen3:4b, no thinking) for conversation turns and `mistral-small` for error analysis.
-- §5, conversation mode: split the "generate reply + note any errors" step. The reply goes out immediately. Error detection runs as a background or end-of-session batch job. At about 54 s per sentence it will not keep up with per-turn analysis, so it needs a queue. Tag-driven `mastery` updates should wait until the tag taxonomy is fixed (finding 4).
+- §2 and §9: replace "Qwen3:8b or 14b" as the single LLM. Use a small fast model (qwen3:4b, no thinking) for conversation turns and `mistral-small` for error analysis, with explanations off.
+- §5, conversation mode: split the "generate reply + note any errors" step. The reply goes out immediately. Error detection runs as a background or end-of-session batch job. At about 24 s per sentence (without explanations) it can keep up with a queue between turns, but not in real time. Tag-driven `mastery` updates should wait until the tag taxonomy is fixed (finding 4).
 - State explicitly that thinking mode is off.
-- Note `gemma3:12b` as a fallback if mistral-small's latency is too high, with the false-positive risk.
+- Note `gemma3:12b` (22 s with explanations, so probably faster without) as a fallback if mistral-small's latency is still too high, with the false-positive risk.
+- If the learner needs explanations, generate them separately, only for the errors found, rather than in the detection call.
 
 Per CLAUDE.md, `planning.md` changes go through plan mode, so these are listed here instead of being applied.
 
@@ -122,8 +128,9 @@ Per CLAUDE.md, `planning.md` changes go through plan mode, so these are listed h
 
 1. Review `concepts.json` for overlapping labels (elision vs contraction_articles, quantity_de vs elision, subjunctive vs verb_conjugation) and re-score the existing outputs with equivalent tags allowed.
 2. Add 20 or more sentences, including multi-error and tricky correct ones, and a few of your own real mistakes. Re-run mistral-small and gemma3:12b.
-3. Try a shorter output format for mistral-small (tags and corrections only, no explanations) and measure the latency saving. Check whether it also fixes the s16 rewrite.
-4. Repeat each model two or three times, with nothing else running, to get latency variance.
-5. Measure mistral-small and a chat model running together on this machine.
-6. Add `--out` or a printed warning to `run_eval.py` for the silent `think` fallback.
-7. Optional: re-run thinking mode for qwen3:4b on the clean prompt, to confirm finding 6.
+3. Run mistral-small with and without `--no-explain` back to back in one session to get a clean latency saving (finding 10). Also try `gemma3:12b --no-explain`.
+4. Measure how much of the 13 s floor on correct sentences is prompt processing. Try a shorter system prompt, and check that Ollama reuses the cached prefix between calls.
+5. Repeat each model two or three times, with nothing else running, to get latency variance.
+6. Measure mistral-small and a chat model running together on this machine.
+7. Add `--out` or a printed warning to `run_eval.py` for the silent `think` fallback.
+8. Optional: re-run thinking mode for qwen3:4b on the clean prompt, to confirm finding 6.

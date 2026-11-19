@@ -17,14 +17,15 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 OLLAMA_URL = "http://localhost:11434/api/chat"
+TIMEOUT_S = 900  # per request; a timeout is recorded as a failed row
 CONCEPTS = json.loads((HERE / "concepts.json").read_text())
 CONCEPT_NAMES = [c["name"] for c in CONCEPTS]
 
-SYSTEM_PROMPT = """You are a careful French teacher checking one sentence written by a learner.
+SYSTEM_PROMPT_TEMPLATE = """You are a careful French teacher checking one sentence written by a learner.
 
 - has_error: true only if the sentence contains a real grammatical or spelling error in standard French. Style preferences are NOT errors.
 - corrected: the minimally corrected sentence (change as little as possible). If there is no error, copy the sentence exactly.
-- errors: one entry per error with the original fragment, its correction, one concept tag from the list below, and a one-sentence explanation in English.
+- errors: one entry per error with the original fragment, its correction, one concept tag from the list below{explain_prompt}.
 
 Concept tags:
 """ + "\n".join(f"- {c['name']}: {c['description']}" for c in CONCEPTS)
@@ -53,18 +54,35 @@ SCHEMA = {
 }
 
 
-def chat(model: str, sentence: str, think: bool) -> tuple[dict, bool]:
+def build_prompt(explain: bool) -> str:
+    return SYSTEM_PROMPT_TEMPLATE.replace(
+        "{explain_prompt}", ", and a one-sentence explanation in English" if explain else ""
+    )
+
+
+def build_schema(explain: bool) -> dict:
+    """Without explanations the model emits far fewer tokens, which matters on CPU."""
+    if explain:
+        return SCHEMA
+    item = SCHEMA["properties"]["errors"]["items"]
+    props = {k: v for k, v in item["properties"].items() if k != "explanation"}
+    required = [k for k in item["required"] if k != "explanation"]
+    items = {**item, "properties": props, "required": required}
+    return {**SCHEMA, "properties": {**SCHEMA["properties"], "errors": {"type": "array", "items": items}}}
+
+
+def chat(model: str, sentence: str, think: bool, explain: bool) -> tuple[dict, bool]:
     """Return (response, think_applied). think_applied is False if the model rejected the flag."""
     body = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": build_prompt(explain)},
             {"role": "user", "content": sentence},
         ],
-        "format": SCHEMA,
+        "format": build_schema(explain),
         "stream": False,
         "think": think,
-        "options": {"temperature": 0, "num_predict": 4096},
+        "options": {"temperature": 0, "num_predict": 2048},
     }
     try:
         return _post(body), think
@@ -80,7 +98,7 @@ def _post(body: dict) -> dict:
     req = urllib.request.Request(
         OLLAMA_URL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=1800) as resp:
+    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
         return json.load(resp)
 
 
@@ -158,6 +176,7 @@ def main() -> None:
     ap.add_argument("--models", nargs="+", default=["qwen3:4b"])
     ap.add_argument("--data", type=Path, default=HERE / "test_sentences.jsonl")
     ap.add_argument("--think", action="store_true", help="enable thinking mode (slower, maybe more accurate)")
+    ap.add_argument("--no-explain", action="store_true", help="omit the explanation field (shorter output, faster)")
     ap.add_argument("--limit", type=int, help="only run the first N sentences")
     args = ap.parse_args()
 
@@ -168,11 +187,15 @@ def main() -> None:
     summaries = []
     with out_path.open("w") as out:
         for model in args.models:
-            print(f"\n=== {model} (think={args.think}) ===")
+            print(f"\n=== {model} (think={args.think}, explain={not args.no_explain}) ===")
             rows = []
             warned = False
             for gold in gold_rows:
-                resp, think_applied = chat(model, gold["text"], args.think)
+                try:
+                    resp, think_applied = chat(model, gold["text"], args.think, not args.no_explain)
+                except TimeoutError:
+                    # Counted as a failed row below, same as a truncated response.
+                    resp, think_applied = {"done_reason": "length", "total_duration": TIMEOUT_S * 1e9}, args.think
                 if args.think and not think_applied and not warned:
                     print(f"WARNING: {model} has no thinking mode; running WITHOUT thinking.")
                     warned = True
@@ -188,6 +211,7 @@ def main() -> None:
                     "model": model,
                     "think": think_applied,
                     "think_requested": args.think,
+                    "explain": not args.no_explain,
                     "gold": gold,
                     "pred": pred,
                     "metrics": metrics,
