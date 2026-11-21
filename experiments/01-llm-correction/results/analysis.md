@@ -14,14 +14,16 @@ Date: first runs 2026-11-15, re-run 2026-11-17 after removing the answer leak an
 
 ## Runs analysed
 
-| Config | Raw output | Terminal copy |
-| --- | --- | --- |
-| mistral-small (no think, `--no-explain`), clean prompt | `20261119-221504.jsonl` | `experiments/mistral_no_explain.txt` |
-| qwen3:4b, qwen3:8b (no think), clean prompt | `20261117-230620.jsonl` | `experiments/all_4.txt` |
-| mistral-small, gemma3:12b (no think), clean prompt | `20261117-233924.jsonl` | `experiments/all_4.txt` |
-| qwen3:4b, qwen3:8b, mistral-small (no think), leaky prompt | `20261115-202639.jsonl` | `all_3_run_1.txt` |
-| qwen3:8b, think, leaky prompt | `20261115-205141.jsonl` | `qwen3-8b-thinking.txt` |
-| qwen3:4b, think, leaky prompt | `20261115-211321.jsonl` | `qwen3-4b-thinking.txt` |
+| Config | Raw output |
+| --- | --- |
+| mistral-small (no think, `--no-explain`), clean prompt | `05_clean_prompt_mistral_no_explain.jsonl` |
+| qwen3:4b, qwen3:8b, mistral-small, gemma3:12b (no think), clean prompt | `03_clean_prompt_nothink_4_models.jsonl` |
+| qwen3:4b think (complete), qwen3:8b think (first 6 sentences only, then timed out), clean prompt, 2026-11-18 | `04_clean_prompt_think_4b.jsonl` |
+| qwen3:4b, qwen3:8b, mistral-small (no think), leaky prompt | `01_initial_leaky_nothink.jsonl` |
+| qwen3:8b, think, leaky prompt | `02_initial_leaky_think_4b_8b.jsonl` |
+| qwen3:4b, think, leaky prompt | `02_initial_leaky_think_4b_8b.jsonl` |
+
+Each file is the concatenation of the original timestamped result files for that stage, with every row unchanged. Each row records its own `model`, `think` and `explain` fields. `01_initial_leaky_nothink.jsonl` also holds an early 5-sentence qwen3:4b smoke run (2026-10-28) and the 1-sentence mistral-small "think" run described below. The two empty result files from failed runs and all the terminal copies (`.txt`) were deleted, since the jsonl files hold the same output.
 
 The 2026-11-15 `mistral-small` think run (1 sentence) is excluded. `mistral-small` has no thinking mode, so Ollama rejects the flag and the script silently retries without it.
 
