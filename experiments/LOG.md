@@ -11,6 +11,19 @@ One entry per experiment, newest first. Keep entries short. The important line i
 **Next:**
 -->
 
+## 2026-11-21 — 01 LLM: clean and tightened prompt, 4 models, no explanations
+**Question:** With the answer leak removed, which model should do error correction, and does a stricter "fix only the wrong words" prompt help?
+**Setup:** Same 18 sentences, temperature 0, no thinking, `--no-explain`, one run per model. Covers the leak-free re-runs since 11-15. Full write-up: `01-llm-correction/results/analysis.md`.
+**Result:**
+- mistral-small: detect 1.00, exact fix 18/18 (17/18 before the stricter prompt), 0/5 false positives, concept recall 0.85, 23.6 s per sentence at 2.7 tok/s. The prompt was written after seeing its one miss, so 18/18 is optimistic.
+- gemma3:12b: fix 15/18, 1 false positive (s12 trap), recall 0.69, 15.9 s.
+- qwen3:8b: fix 14/18, 0 false positives, recall 0.46, 6.2 s. qwen3:4b: fix 12/18, 1 false positive, recall 0.31.
+- qwen3:4b decoded at 3.3 tok/s (34 on 11-17), so its 19.1 s latency is anomalous and the cause unknown.
+- The stricter prompt did not clearly help gemma or Qwen. Their earlier runs also had explanations, so the cause is not isolated.
+- Throughput varies a lot between runs, even with the `performance` governor.
+**Changes to plan:** applied. §1, §2 and §9: qwen3:4b for conversation (provisional) and mistral-small for error analysis replace Qwen3:8b/14b; thinking off. §5: reply is sent first, error analysis runs in the background without explanations; mistral-small grades writing. §4 and §5: tag-driven mastery updates on hold until the tags are reliable.
+**Next:** fix overlapping concept tags; write 20+ new sentences without looking at model outputs; re-measure qwen3:4b speed; run mistral-small alongside a chat model.
+
 ## 2026-11-15 — 01 LLM: qwen3:4b / qwen3:8b / mistral-small, with and without thinking
 **Question:** Which local model can detect, fix and tag French errors well enough to feed the mastery tracker, at an acceptable CPU speed?
 **Setup:** 18 sentences (13 with errors, 5 correct), temperature 0, one run per config. Full write-up: `01-llm-correction/results/analysis.md`.

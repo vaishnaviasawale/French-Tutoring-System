@@ -24,7 +24,7 @@ CONCEPT_NAMES = [c["name"] for c in CONCEPTS]
 SYSTEM_PROMPT_TEMPLATE = """You are a careful French teacher checking one sentence written by a learner.
 
 - has_error: true only if the sentence contains a real grammatical or spelling error in standard French. Style preferences are NOT errors.
-- corrected: the minimally corrected sentence (change as little as possible). If there is no error, copy the sentence exactly.
+- corrected: the learner's sentence with ONLY the wrong words fixed. Keep every other word, in the same order. Do not rephrase, shorten, reorder, or replace words with pronouns, even if the result would also be correct French. If there is no error, copy the sentence exactly.
 - errors: one entry per error with the original fragment, its correction, one concept tag from the list below{explain_prompt}.
 
 Concept tags:
@@ -35,7 +35,10 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "has_error": {"type": "boolean"},
-        "corrected": {"type": "string"},
+        "corrected": {
+            "type": "string",
+            "description": "The learner's sentence with only the wrong words fixed; all other words unchanged.",
+        },
         "errors": {
             "type": "array",
             "items": {

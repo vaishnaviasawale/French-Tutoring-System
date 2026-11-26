@@ -10,7 +10,7 @@ A fully local, adaptive French-learning system: conversation practice, pronuncia
 flowchart TB
     UI[Frontend UI<br/>web app + avatar] --> API[Backend API<br/>FastAPI]
     API --> DB[(SQLite/Postgres<br/>tracker + logs)]
-    API --> LLM[Local LLM<br/>Ollama: Qwen3-8B]
+    API --> LLM["Local LLMs via Ollama<br/>qwen3:4b (chat)<br/>mistral-small (corrections)"]
     API --> ASR[Local ASR<br/>whisper.cpp]
     API --> TTS[Local TTS<br/>Piper / Coqui]
     API --> ALIGN[Forced Aligner /<br/>Phoneme model]
@@ -35,7 +35,7 @@ flowchart TB
 | --- | --- | --- |
 | Backend | **Python + FastAPI** | Best ecosystem for ML glue (Whisper, TTS, phonemizer all Python-native) |
 | DB | **SQLite** (→ Postgres if it grows) | Zero-ops, fine for single-user |
-| LLM serving | **Ollama** (Qwen3:8b or 14b) | Local REST API, easy model swaps |
+| LLM serving | **Ollama**, thinking mode off: **qwen3:4b** for conversation turns (provisional), **mistral-small** for error analysis | Local REST API, easy model swaps. Small model keeps replies fast; the larger one corrects better |
 | ASR | **whisper.cpp** (French model) | Fast, local, word-level timestamps |
 | TTS | **Piper** (fast, good French voices) or **Coqui TTS** (more expressive, slower) | Local, gives phoneme/timing data |
 | G2P (text→phonemes) | **phonemizer** (espeak-ng backend, French) | Standard, free, good French coverage |
@@ -47,6 +47,8 @@ flowchart TB
 | Audio I/O | Browser `MediaRecorder` API → backend | Standard, no extra install |
 
 Everything above runs fully offline once models are downloaded.
+
+**The LLM split is provisional** (see `experiments/01-llm-correction/results/analysis.md`). It rests on 18 easy sentences, one run each, testing correction only. Still untested: conversation quality, the current speed of qwen3:4b (one run was about 10 times slower than earlier ones, cause unknown) and running both models together. `gemma3:12b` is a faster fallback for error analysis (about 16 s per sentence against 24 s), but it marked a correct sentence as wrong.
 
 ---
 
@@ -158,7 +160,7 @@ def update_mastery(p_known: float, correct: bool,
     return p_known_given_obs + (1 - p_known_given_obs) * p_learn
 ```
 
-Run this after every `attempts` row; write the result back to `mastery.p_known`. Concepts below a threshold (e.g. `p_known < 0.6`) are "weak" — feed the lowest N into the next exercise generation prompt.
+Run this after every `attempts` row; write the result back to `mastery.p_known`. Updates driven by LLM grammar tags are on hold until those tags are reliable (see §5). Concepts below a threshold (e.g. `p_known < 0.6`) are "weak" — feed the lowest N into the next exercise generation prompt.
 
 ---
 
@@ -171,18 +173,25 @@ sequenceDiagram
     participant U as User (mic)
     participant ASR
     participant LLM
+    participant Analyser
     participant TTS
     participant Avatar
 
     LLM->>LLM: Build prompt: persona + weak concepts + history
-    LLM->>TTS: Tutor's line (text)
+    LLM->>TTS: Tutor's line (qwen3:4b)
     TTS->>Avatar: audio + viseme timeline
     Avatar->>U: speaks + animates
     U->>ASR: speaks response
     ASR->>LLM: transcribed text
-    LLM->>LLM: generate reply + note any errors
-    LLM-->>DB: log attempt, update mastery if grammar error flagged
+    LLM->>TTS: reply (qwen3:4b), sent straight away
+    ASR-)Analyser: queue transcribed text
+    Note over Analyser: mistral-small, background<br/>or end of session
+    Analyser-->>DB: log attempt and any errors
 ```
+
+- Error analysis stays off the live path: it takes about 24 s per sentence at full CPU speed and has been seen at about 47 s.
+- It runs without explanations. If you want one, generate it in a separate call, only for the errors found.
+- Concept tags don't update `mastery` yet. The best result so far is 11 of 13 correct, and the misses are mostly due to overlapping labels in the tag list.
 
 ### Read-aloud / pronunciation mode
 
@@ -206,7 +215,7 @@ sequenceDiagram
 
 ### Writing mode
 
-`exercise.content` (prompt) → user types → LLM grades against a rubric (grammar, concept-specific check) → writes `feedback`, updates `mastery` for any concept explicitly tested.
+`exercise.content` (prompt) → user types → `mistral-small` grades (waiting is acceptable here) against a rubric (grammar, concept-specific check) → writes `feedback`, updates `mastery` for any concept explicitly tested (taken from the exercise, not from LLM tags).
 
 ### Vocab review mode
 
@@ -270,7 +279,8 @@ french-tutor/
 
 | Purpose | Model |
 | --- | --- |
-| Tutor LLM | `ollama pull qwen3:8b` |
+| Conversation LLM | `ollama pull qwen3:4b` |
+| Error analysis LLM | `ollama pull mistral-small` |
 | ASR | `whisper.cpp` French-capable model (e.g. `medium` or `large-v3`) |
 | TTS | Piper French voice (`fr_FR-*`) |
 | G2P | espeak-ng French backend via `phonemizer` |
