@@ -10,20 +10,24 @@ The rest of the system depends on this answer. The mastery tracker only learns w
 ollama pull qwen3:8b            # qwen3:4b is already installed
 uv run python 01-llm-correction/run_eval.py --models qwen3:4b qwen3:8b
 uv run python 01-llm-correction/run_eval.py --models qwen3:8b --think     # does reasoning help?
+uv run python 01-llm-correction/run_eval.py --rescore 01-llm-correction/results/*.jsonl
+uv run python 01-llm-correction/contention.py          # chat speed while analysis runs
 ```
 
 Also worth trying: `qwen3:14b`, `mistral-small` (Mistral is a French company), and `gemma3:12b`.
 
 ## Files
 
-- `test_sentences.jsonl`: gold data. **Add your own real mistakes here.** They're worth more than the made-up ones. Some sentences are deliberately correct (e.g. `s12`, a trap for over-correction).
+- `test_sentences.jsonl`: gold data. **Add your own real mistakes here.** They're worth more than the made-up ones. Some sentences are deliberately correct (e.g. `s12`, a trap for over-correction). `also_accept` lists tags that are just as right as the expected one.
 - `concepts.json`: the tag set the model must choose from. It's the seed for `data/concepts_seed.json` later.
 - `run_eval.py`: runs every model on every sentence and prints a summary table. Full outputs, including explanations, go to `results/`.
+- `contention.py`: times chat replies with and without a second model analysing sentences, and logs free RAM.
 
 ## What to look at
 
 - **false_pos**: correct sentences the model "fixed". For a learner, this is the worst failure.
 - **concept_recall**: whether it tagged the right concept. This feeds BKT directly.
+- **concept_lenient**: the same, also counting `also_accept` tags. The gap between the two is label overlap, not model error.
 - **sec/sent** and **tok/s**: is conversation mode going to feel laggy?
 - Read the explanations in `results/`. Are they right, and would they help you?
 

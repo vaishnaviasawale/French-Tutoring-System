@@ -2,6 +2,8 @@
 
 Date: first runs 2026-11-15, re-run 2026-11-17 after removing the answer leak and making grading consistent (commit `c2b34a5`). All four models have now been run with the tightened prompt (2026-11-21). CPU only, 18 sentences (13 with an error, 5 correct), temperature 0, one run per config.
 
+**Correction (2026-11-26):** the runs below were most likely not CPU only. Ollama uses the laptop's NVIDIA GPU, and how much of a model fits on it depends on what else is loaded. Treat the latency figures and findings 7 and 10 with that in mind. qwen3:4b also fails as a chat model with thinking off. See [Checks on 2026-11-26](#checks-on-2026-11-26). Accuracy scores are not re-tested.
+
 ## Decision (provisional)
 
 - **Use `mistral-small` for error detection and correction, without explanations.** With the tightened prompt it is the only model with perfect detection (18/18, 0/5 false positives), and it fixes all 18 sentences exactly (17 of 18 before). The next best, gemma3:12b, fixes 15. The old miss (s16) was a valid but over-aggressive rewrite. Dropping the `explanation` field (`--no-explain`) cut latency to about 24 s per sentence at full machine speed, with the same accuracy (finding 10). The 18 of 18 is one run, and the prompt was tightened after seeing s16, so it is optimistic (finding 1).
@@ -164,3 +166,65 @@ Concept tags missed (expected → got):
 5. Repeat each model two or three times, with nothing else running, to get latency and accuracy variance.
 6. Measure mistral-small and a chat model running together on this machine.
 7. Optional: re-run thinking mode for qwen3:4b on the clean prompt, to confirm finding 6.
+
+## Checks on 2026-11-26
+
+One run each, `powersave` governor, Ollama 0.32.1.
+
+### Code changes
+
+| File | Change |
+| --- | --- |
+| `run_eval.py` | New `concepts_match` function, used for the strict `concept_ok` and the new `concept_ok_lenient`. The summary table has a `concept_lenient` column. New `--rescore FILE...` option re-grades saved results against the current test sentences without calling a model or changing the files, and skips rows with no matching sentence. |
+| `test_sentences.jsonl` | New `also_accept` field: s03 also accepts `contraction_articles`; s14 also accepts `elision` and `contraction_articles`. |
+| `contention.py` (new) | Times chat alone, analysis alone, then chat while analysis loops. Logs time to first word, tok/s, load time, loaded models, free RAM and swap. Stops chat turns and reports the error if analysis fails. |
+| `README.md` | Usage and notes for the three changes above. |
+
+Not accepted as alternatives: `verb_conjugation` for s04 (subjunctive) and `contraction_articles` for s09 (negation). The mastery tracker would credit the wrong concept.
+
+### Re-scored tags (tightened-prompt run, `07_...`)
+
+| Model | Strict | Lenient |
+| --- | --- | --- |
+| mistral-small | 11/13 | 13/13 |
+| gemma3:12b | 9/13 | 11/13 |
+| qwen3:8b | 6/13 | 8/13 |
+| qwen3:4b | 4/13 | 5/13 |
+
+Command: `run_eval.py --rescore` on files `03`, `05`, `06` and `07`.
+
+### Both models together (`contention.py`, defaults)
+
+Raw output: `contention-20261126-220906.jsonl`. Means over 6 chat turns per phase.
+
+| | Alone | Together |
+| --- | --- | --- |
+| qwen3:4b chat, tok/s | 39.1 | 4.8 |
+| qwen3:4b chat, seconds per 80-token reply | 2.4 | 20.2 (first turn 29.5, including 11.9 s reload) |
+| qwen3:4b chat, seconds to first word | 0.3 | 3.7 (1.5 to 2.1 after the first turn) |
+| mistral-small analysis, tok/s | 2.7 | 2.4 |
+| mistral-small analysis, seconds per sentence | 25.9 | 26.4 |
+
+Lowest free RAM was 16.8 GB. Swap use went from 0.3 to 2.2 GB. "First word" is the first output of any kind, which for qwen3:4b was reasoning, not the reply. Ollama had unloaded qwen3:4b by the time the together phase started.
+
+### Thinking settings (one-off script, not kept)
+
+One prompt ("Je voudrais visiter Lyon l'été prochain.") to `/api/chat` with the system prompt from `contention.py`, temperature 0, `num_predict` 700.
+
+| Model | `think: false` | `think: false` + `/no_think` | `think: true` |
+| --- | --- | --- | --- |
+| qwen3:4b | English reasoning as the reply, cut off at 700 tokens | same | 700 tokens of reasoning, empty reply |
+| qwen3:8b | clean French reply, 38 tokens | clean French reply, 32 tokens | clean French reply, 111 tokens |
+
+### GPU placement (one-off script, not kept)
+
+Each model generated 120 tokens through `/api/generate`, with models unloaded between cases using `ollama stop`. Run twice; the second run also printed `ollama ps`. `lspci` and the Ollama system log identified the GPU (NVIDIA RTX 1000 Ada, 6 GB, through Vulkan).
+
+| Case | tok/s | Share on GPU |
+| --- | --- | --- |
+| qwen3:4b alone | 38.5 to 39.1 | 100% |
+| qwen3:4b with mistral-small idle | 4.3 to 4.5 | 19% |
+| qwen3:8b alone | 14.1 to 14.8 | 77% |
+| qwen3:8b after mistral-small, first run | 2.2 | not recorded (both loaded) |
+| qwen3:8b after mistral-small, second run | 14.3 | 77% (mistral-small was unloaded) |
+| mistral-small alone | 2.6 to 2.7 | 29% |

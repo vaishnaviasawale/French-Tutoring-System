@@ -11,6 +11,18 @@ One entry per experiment, newest first. Keep entries short. The important line i
 **Next:**
 -->
 
+## 2026-11-26 — 01 LLM: two models loaded together, and lenient tag scoring
+**Question:** Does chat stay usable while error analysis runs, and how many tag misses are only label overlap?
+**Setup:** `contention.py` (qwen3:4b chat, mistral-small analysis, 6 turns per phase), short Ollama probes, `run_eval.py --rescore` on saved outputs (new `also_accept` field in the test sentences). Method and full tables: `01-llm-correction/results/analysis.md`. Ollama 0.32.1, `powersave` governor, one run.
+**Result:**
+- **Ollama is using an NVIDIA RTX 1000 Ada (6 GB) through Vulkan.** Earlier "CPU only" latencies are wrong about the hardware. Alone, qwen3:4b runs 100% on the GPU, qwen3:8b 77% and mistral-small 29%.
+- With mistral-small loaded, qwen3:4b drops from 39 to about 4.5 tok/s even when mistral is idle: only 19% of it stays on the GPU. An 80-token reply went from 2.4 s to 20.2 s while analysis ran. This is the likely cause of the slow 4b run on 11-21.
+- Analysis barely changed (2.7 → 2.4 tok/s). Lowest free RAM 16.8 GB; swap rose from 0.3 to 2.2 GB.
+- **qwen3:4b does not stop thinking.** With `think: false` (also with `/no_think`) it writes English reasoning as the reply and used up 700 tokens without a final answer. qwen3:8b answered in clean French (1 prompt).
+- Lenient tags (s03 and s14 accept overlapping labels), tightened-prompt run: mistral-small 13/13 (strict 11), gemma3:12b 11/13 (9), qwen3:8b 8/13 (6), qwen3:4b 5/13 (4).
+**Changes to plan:** pending. The results contradict §2 and §9: qwen3:4b is unfit for conversation as configured, and the two-model setup needs a GPU placement fix. CLAUDE.md also says there is no NVIDIA GPU.
+**Next:** run mistral-small on the CPU only (`num_gpu: 0`) so the chat model keeps the GPU; test qwen3:8b as the chat model; then update the plan.
+
 ## 2026-11-21 — 01 LLM: clean and tightened prompt, 4 models, no explanations
 **Question:** With the answer leak removed, which model should do error correction, and does a stricter "fix only the wrong words" prompt help?
 **Setup:** Same 18 sentences, temperature 0, no thinking, `--no-explain`, one run per model. Covers the leak-free re-runs since 11-15. Full write-up: `01-llm-correction/results/analysis.md`.

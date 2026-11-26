@@ -2,6 +2,7 @@
 
     uv run python 01-llm-correction/run_eval.py --models qwen3:4b qwen3:8b
     uv run python 01-llm-correction/run_eval.py --models qwen3:8b --think --limit 5
+    uv run python 01-llm-correction/run_eval.py --rescore 01-llm-correction/results/*.jsonl
 
 Uses only the standard library, so no `uv sync` group is needed. Ollama must be running.
 """
@@ -110,17 +111,28 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def concepts_match(gold: dict, pred: dict, lenient: bool) -> bool | None:
+    """True if every expected tag was predicted. None for correct sentences, which have no tags to find.
+
+    With `lenient`, a tag listed in the sentence's `also_accept` counts in place of the expected one.
+    """
+    if not gold["has_error"]:
+        return None
+    predicted = {e["concept"] for e in pred["errors"]}
+    also = gold.get("also_accept", {}) if lenient else {}
+    return all(predicted & {c, *also.get(c, [])} for c in gold["concepts"])
+
+
 def grade(gold: dict, pred: dict, text: str) -> dict:
     # Models sometimes set has_error inconsistently with `corrected`, so derive detection from the text itself.
     pred = {**pred, "has_error": normalize(pred["corrected"]) != normalize(text)}
-    pred_concepts = {e["concept"] for e in pred["errors"]}
     return {
         "detect_ok": pred["has_error"] == gold["has_error"],
         "false_positive": pred["has_error"] and not gold["has_error"],
         "missed": gold["has_error"] and not pred["has_error"],
         "fix_exact": normalize(pred["corrected"]) == normalize(gold["corrected"]),
-        # Only meaningful for sentences that actually contain errors.
-        "concept_ok": set(gold["concepts"]) <= pred_concepts if gold["has_error"] else None,
+        "concept_ok": concepts_match(gold, pred, lenient=False),
+        "concept_ok_lenient": concepts_match(gold, pred, lenient=True),
     }
 
 
@@ -143,6 +155,7 @@ def failed_metrics(gold: dict) -> dict:
         "missed": gold["has_error"],
         "fix_exact": False,
         "concept_ok": False if gold["has_error"] else None,
+        "concept_ok_lenient": False if gold["has_error"] else None,
     }
 
 
@@ -160,6 +173,9 @@ def summarize(model: str, rows: list[dict]) -> dict:
         "concept_recall": (
             sum(r["metrics"]["concept_ok"] for r in concept_rows) / len(concept_rows) if concept_rows else 0
         ),
+        "concept_lenient": (
+            sum(r["metrics"]["concept_ok_lenient"] for r in concept_rows) / len(concept_rows) if concept_rows else 0
+        ),
         "sec/sent": sum(r["latency_s"] for r in rows) / len(rows),
         "tok/s": sum(r["tok_per_s"] for r in rows) / len(rows),
     }
@@ -174,6 +190,30 @@ def print_table(summaries: list[dict]) -> None:
         print("  ".join(fmt(s[c]).ljust(w) for c, w in zip(cols, widths)))
 
 
+def rescore(paths: list[Path], gold_by_id: dict[str, dict]) -> None:
+    """Grade saved outputs again with the current gold data, without calling a model. Files are not changed."""
+    for path in paths:
+        groups: dict[str, list[dict]] = {}
+        skipped = 0
+        for line in path.read_text().splitlines():
+            row = json.loads(line)
+            gold = gold_by_id.get(row.get("gold", {}).get("id"))
+            if gold is None:  # e.g. contention.py output, or a sentence that isn't in --data
+                skipped += 1
+                continue
+            if row.get("truncated"):
+                metrics = failed_metrics(gold)
+            else:
+                metrics = grade(gold, row["pred"], gold["text"])
+            label = f"{row['model']} think={row['think']} explain={row.get('explain', True)}"
+            groups.setdefault(label, []).append({**row, "gold": gold, "metrics": metrics})
+        print(f"\n{path}")
+        if skipped:
+            print(f"Skipped {skipped} rows with no matching test sentence.")
+        if groups:
+            print_table([summarize(label, rows) for label, rows in groups.items()])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--models", nargs="+", default=["qwen3:4b"])
@@ -181,9 +221,13 @@ def main() -> None:
     ap.add_argument("--think", action="store_true", help="enable thinking mode (slower, maybe more accurate)")
     ap.add_argument("--no-explain", action="store_true", help="omit the explanation field (shorter output, faster)")
     ap.add_argument("--limit", type=int, help="only run the first N sentences")
+    ap.add_argument("--rescore", type=Path, nargs="+", metavar="FILE", help="re-grade saved result files and exit")
     args = ap.parse_args()
 
     gold_rows = [json.loads(line) for line in args.data.read_text().splitlines() if line.strip()]
+    if args.rescore:
+        rescore(args.rescore, {g["id"]: g for g in gold_rows})
+        return
     gold_rows = gold_rows[: args.limit]
     out_path = HERE / "results" / f"{datetime.now():%Y%m%d-%H%M%S}.jsonl"
 

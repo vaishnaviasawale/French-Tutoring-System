@@ -1,6 +1,6 @@
 {"id": "s01", "text": "Je suis allé à la plage hier avec mes amis.", "has_error": false, "corrected": "Je suis allé à la plage hier avec mes amis.", "concepts": []}
 {"id": "s02", "text": "Elle est allé au marché ce matin.", "has_error": true, "corrected": "Elle est allée au marché ce matin.", "concepts": ["past_participle_agreement"]}
-{"id": "s03", "text": "J'ai besoin de un stylo.", "has_error": true, "corrected": "J'ai besoin d'un stylo.", "concepts": ["elision"]}
+{"id": "s03", "text": "J'ai besoin de un stylo.", "has_error": true, "corrected": "J'ai besoin d'un stylo.", "concepts": ["elision"], "also_accept": {"elision": ["contraction_articles"]}}
 {"id": "s04", "text": "Il faut que tu viens demain.", "has_error": true, "corrected": "Il faut que tu viennes demain.", "concepts": ["subjunctive_present"]}
 {"id": "s05", "text": "La problème est difficile.", "has_error": true, "corrected": "Le problème est difficile.", "concepts": ["gender_agreement"]}
 {"id": "s06", "text": "Je vais à le cinéma ce soir.", "has_error": true, "corrected": "Je vais au cinéma ce soir.", "concepts": ["contraction_articles"]}
@@ -11,7 +11,7 @@
 {"id": "s11", "text": "Les filles sont très contents.", "has_error": true, "corrected": "Les filles sont très contentes.", "concepts": ["adjective_agreement"]}
 {"id": "s12", "text": "Je me suis lavé les mains.", "has_error": false, "corrected": "Je me suis lavé les mains.", "concepts": [], "note": "trap: no agreement because the COD (les mains) comes after the verb"}
 {"id": "s13", "text": "C'est le livre que je t'ai parlé.", "has_error": true, "corrected": "C'est le livre dont je t'ai parlé.", "concepts": ["relative_pronouns"]}
-{"id": "s14", "text": "Il a beaucoup des amis.", "has_error": true, "corrected": "Il a beaucoup d'amis.", "concepts": ["quantity_de"]}
+{"id": "s14", "text": "Il a beaucoup des amis.", "has_error": true, "corrected": "Il a beaucoup d'amis.", "concepts": ["quantity_de"], "also_accept": {"quantity_de": ["elision", "contraction_articles"]}}
 {"id": "s15", "text": "Je pense qu'il est déjà parti.", "has_error": false, "corrected": "Je pense qu'il est déjà parti.", "concepts": []}
 {"id": "s16", "text": "Elle s'est souvenu de son enfance.", "has_error": true, "corrected": "Elle s'est souvenue de son enfance.", "concepts": ["past_participle_agreement"]}
 {"id": "s17", "text": "J'habite en Paris depuis deux ans.", "has_error": true, "corrected": "J'habite à Paris depuis deux ans.", "concepts": ["prepositions_places"]}
